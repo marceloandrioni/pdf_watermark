@@ -18,7 +18,7 @@ from docx import Document
 from docx.shared import RGBColor, Mm, Pt
 from gooey import Gooey, GooeyParser
 from subprocess import Popen
-from pikepdf import Pdf, Page
+from pikepdf import Pdf, Page, Encryption, Permissions
 
 # the docx conversion to pdf can be done with docx2pdf/word (windows only) or
 # using libreoffice (windows and linux)
@@ -219,8 +219,21 @@ def main():
 
         page.add_overlay(thumbnail)
 
+    # Do not allow a regular user to modify the file.
+    # This way a user can't simply remove the watermark using a pdf editor like
+    # LibreOffice Draw.
+    allow = Permissions(accessibility=True,
+                        extract=True,
+                        modify_annotation=False,
+                        modify_assembly=False,
+                        modify_form=False,
+                        modify_other=False,
+                        print_lowres=True,
+                        print_highres=True)
+    encryption = Encryption(user='', owner='admin123', allow=allow)
+
     print(f'Output file: {args.outfile}')
-    pdf.save(args.outfile)
+    pdf.save(args.outfile, linearize=True, encryption=encryption)
 
     pdf.close()
 
