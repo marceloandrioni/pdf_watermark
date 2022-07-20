@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Add a watermark to a pdf file.
+"""Add a watermark to a pdf file.
 
 Author: Marcelo Andrioni
 https://github.com/marceloandrioni
@@ -13,9 +12,7 @@ import sys
 import shutil
 import tempfile
 import argparse
-import getpass
 from pathlib import Path
-import datetime
 import numpy as np
 from docx import Document
 from docx.shared import RGBColor, Mm, Pt
@@ -32,9 +29,6 @@ try:
 except:
     HAS_DOCX2PDF = False
 
-if not any((HAS_LIBREOFFICE, HAS_DOCX2PDF)):
-    raise ValueError('libreoffice or docx2pdf/word must be installed.')
-
 
 # Use CLI (instead of GUI) if the CLI arguments were passed.
 # https://github.com/chriskiehl/Gooey/issues/449#issuecomment-534056010
@@ -43,27 +37,11 @@ if len(sys.argv) > 1:
         sys.argv.append('--ignore-gooey')
 
 
-def convert_to_pdf(input_docx, out_folder):
-    """Convert docx file to pdf using libreoffice.
-    Reference: https://stackoverflow.com/a/56067358/9707202
-    Author: https://stackoverflow.com/users/7037499/dfresh22
-    """
+def create_wmark_docx(text):
 
-    # get libreoffice executable location
-    libre_office = shutil.which('libreoffice')
-    if not libre_office:
-        raise ValueError('Could not find libreoffice executable location in path.')
-
-    p = Popen([libre_office, '--headless', '--convert-to', 'pdf', '--outdir',
-               out_folder, input_docx])
-    # print([libre_office, '--convert-to', 'pdf', input_docx])
-    p.communicate()
-
-
-def create_watermark(wmark_pdf, text):
-
-    wmark_pdf = Path(wmark_pdf)
-    wmark_docx = wmark_pdf.with_suffix('.docx')
+    # create water mark file in temporary folder to overlay in main pdf file
+    wmark_docx = (Path(tempfile.gettempdir())
+                  / 'watermark_{:06d}.docx'.format(np.random.randint(1_000_000)))
 
     # create docx
     document = Document()
@@ -85,6 +63,9 @@ def create_watermark(wmark_pdf, text):
     # p = document.add_paragraph()
     p = document.sections[0].footer.add_paragraph()   # add the text as footer
 
+    # 0 left, 1 center, 2 right, 3 justify
+    p.alignment = 1
+
     run = p.add_run(text)
     font = run.font
     font.name = 'Arial'
@@ -93,29 +74,43 @@ def create_watermark(wmark_pdf, text):
 
     document.save(wmark_docx)
 
+    return wmark_docx
+
+
+def libreoffice_docx2pdf(input_docx, out_folder):
+    """Convert docx file to pdf using libreoffice.
+    Reference: https://stackoverflow.com/a/56067358/9707202
+    Author: https://stackoverflow.com/users/7037499/dfresh22
+    """
+
+    # get libreoffice executable location
+    libre_office = shutil.which('libreoffice')
+    if not libre_office:
+        raise ValueError('Could not find libreoffice executable location in path.')
+
+    p = Popen([libre_office, '--headless', '--convert-to', 'pdf', '--outdir',
+               out_folder, input_docx])
+    # print([libre_office, '--convert-to', 'pdf', input_docx])
+    p.communicate()
+
+
+def convert_docx_to_pdf(wmark_docx):
+
+    wmark_pdf = wmark_docx.with_suffix('.pdf')
+
     # convert docx to pdf
     if HAS_LIBREOFFICE:
-        convert_to_pdf(wmark_docx, wmark_pdf.parent)
+        libreoffice_docx2pdf(wmark_docx, wmark_pdf.parent)
     else:
         docx2pdf.convert(wmark_docx, wmark_pdf)
 
-    # remove docx
-    os.remove(wmark_docx)
-
-    return
+    return wmark_pdf
 
 
 def user_args():
 
-    epilog = ("Example: "
-              f"{sys.argv[0]} "
-              "infile.pdf "
-              "outfile.pdf "
-              "-w 'This is my nice watermark !!!'")
-
     description = 'Add a watermark to a pdf file.'
     parser = GooeyParser(description=description,
-                         epilog=epilog,
                          allow_abbrev=False)
 
     parser.add_argument('infile',
@@ -134,14 +129,42 @@ def user_args():
                             'wildcard': 'PDF file (*.pdf)|*.pdf',
                             'message': 'Select output pdf file'})
 
-    parser.add_argument('-w', '--watermark',
-                        required=True,
-                        help='{:%Y-%m-%d %H:%M:%S}: {}'.format(
-                            datetime.datetime.now(),
-                            getpass.getuser()))
+    # hack to set the name of the group in Gooey
+    # https://stackoverflow.com/questions/53498352/is-there-a-solution-for-required-mutually-exclusive-arguments-listed-as-optional
+    group_wmark = parser.add_argument_group(title='Watermark options')
+
+    group_wmark2 = group_wmark.add_mutually_exclusive_group(required=True)
+
+    group_wmark2.add_argument('-wt', '--watermark_text',
+                              dest='wmark_text',
+                              help='Text for watermark.',
+                              default='')
+
+    group_wmark2.add_argument('-wd', '--watermark_docx',
+                              type=lambda x: Path(x),
+                              dest='wmark_docx',
+                              help='Watermark docx file.',
+                              widget='FileChooser',
+                              gooey_options={
+                                  'wildcard': 'Docx file (*.docx)|*.docx',
+                                  'message': 'Select watermark docx file'})
+
+    group_wmark2.add_argument('-wp', '--watermark_pdf',
+                              type=lambda x: Path(x),
+                              dest='wmark_pdf',
+                              help='Watermark pdf file.',
+                              widget='FileChooser',
+                              gooey_options={
+                                  'wildcard': 'PDF file (*.pdf)|*.pdf',
+                                  'message': 'Select watermark pdf file'})
 
     args = parser.parse_args()
 
+    if not args.wmark_pdf and not any((HAS_LIBREOFFICE, HAS_DOCX2PDF)):
+        raise ValueError('libreoffice or docx2pdf/word must be installed to '
+                         'create a pdf file from the watermark text.')
+
+    # additional checks in case user bypass Gooey to use argparse directly
     if [args.infile.suffix, args.outfile.suffix] != ['.pdf', '.pdf']:
         raise argparse.ArgumentTypeError('Input/Output files must be pdf files.')
 
@@ -152,20 +175,35 @@ def user_args():
     if args.outfile.exists() and os.path.samefile(args.infile, args.outfile):
         raise argparse.ArgumentTypeError("Input/Output files can't be the same.")
 
+    if args.wmark_docx and args.wmark_docx.suffix != '.docx':
+        raise argparse.ArgumentTypeError('Watermark docx file must have .docx '
+                                         'extension.')
+
+    if args.wmark_pdf and args.wmark_pdf.suffix != '.pdf':
+        raise argparse.ArgumentTypeError('Watermark pdf file must have .pdf '
+                                         'extension.')
+
     return args
 
 
 @Gooey(required_cols=1,
+       default_size=(610, 800),
        progress_regex=r"^Page (?P<current>\d+)/(?P<total>\d+)$",
        progress_expr="current / total * 100")
 def main():
 
     args = user_args()
 
-    # create water mark file in temporary folder to overlay in main pdf file
-    wmark_pdf = (Path(tempfile.gettempdir())
-                 / 'watermark_{:05d}.pdf'.format(np.random.randint(10_000)))
-    create_watermark(wmark_pdf, args.watermark)
+    # if wmark_pdf was given, just use it
+    # if wmark_docx was given, convert to pdf and use it
+    # if wmark_text was given, create docx, convert to pdf and use it
+    if args.wmark_pdf:
+        wmark_pdf = args.wmark_pdf
+    elif args.wmark_docx:
+        wmark_pdf = convert_docx_to_pdf(args.wmark_docx)
+    else:
+        wmark_docx = create_wmark_docx(args.wmark_text)
+        wmark_pdf = convert_docx_to_pdf(wmark_docx)
 
     wmark = Pdf.open(wmark_pdf)
     thumbnail = Page(wmark.pages[0])
@@ -186,9 +224,14 @@ def main():
 
     pdf.close()
 
-    # remove water mark file
     wmark.close()
-    os.remove(wmark_pdf)
+
+    # remove temporary files (keep template docx/pdf file given by user)
+    if args.wmark_text:
+        os.remove(wmark_docx)
+        os.remove(wmark_pdf)
+    elif args.wmark_docx:
+        os.remove(wmark_pdf)
 
     print('Done!')
 
