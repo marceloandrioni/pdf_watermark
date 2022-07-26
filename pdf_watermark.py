@@ -24,9 +24,17 @@ from pikepdf import Pdf, Page, Encryption, Permissions
 # using libreoffice (windows and linux)
 HAS_LIBREOFFICE = True if shutil.which('libreoffice') else False
 try:
+
+    # find Microsoft Word
+    import win32com.client
+    _ = win32com.client.Dispatch("Word.Application")
+
     import docx2pdf
+
     HAS_DOCX2PDF = True
+
 except:
+
     HAS_DOCX2PDF = False
 
 
