@@ -15,7 +15,23 @@ or
 
 * Microsoft Word and [docx2pdf](https://pypi.org/project/docx2pdf/) (Windows only)
 
-All the other requirements (e.g.: `os`, `pathlib`, `warnings`, `argparse`) are part of the standard python installation.
+All the other requirements (e.g.: `os`, `pathlib`, `warnings`, `argparse`) are part of the standard python installation. Basically:
+
+__Windows:__
+
+```
+conda create -n pdf gooey python-docx docx2pdf
+conda activate pdf
+pip install pikepdf
+```
+
+__Linux:__
+
+```
+conda create -n pdf gooey python-docx pikepdf
+conda activate pdf
+```
+
 
 __Note:__ pikepdf anaconda [installation](https://anaconda.org/conda-forge/pikepdf) is only available in Linux and OSX. In Windows it should be installed with pip: `pip install pikepdf`
 
