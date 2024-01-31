@@ -20,6 +20,9 @@ from gooey import Gooey, GooeyParser
 from subprocess import Popen
 from pikepdf import Pdf, Page, Encryption, Permissions
 
+# @todo: try to use reportlab to convert the docx file to pdf, eleminating the need for libreoffice/word
+# https://stackoverflow.com/questions/77193084/docx-to-pdf-using-reportlab-without-using-application
+
 # the docx conversion to pdf can be done with docx2pdf/word (windows only) or
 # using libreoffice (windows and linux)
 HAS_LIBREOFFICE = True if shutil.which('libreoffice') else False
